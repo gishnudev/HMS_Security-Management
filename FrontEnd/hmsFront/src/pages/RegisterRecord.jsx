@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { ethers } from "ethers";
-import { Button } from "../components/button";
+import { Button } from "../components/Button";
 import HospitalRecords from "../abi/HospitalRecords.json";
 
 const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";

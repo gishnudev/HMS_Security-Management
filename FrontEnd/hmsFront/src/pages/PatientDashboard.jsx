@@ -140,7 +140,7 @@ import { useEffect, useState } from "react";
 import { ethers } from "ethers";
 import { useNavigate } from "react-router-dom";
 import HospitalRecords from "../abi/HospitalRecords.json";
-import { Button } from "../components/button";
+import { Button } from "../components/Button";
 import { Card, CardContent } from "../components/card";
 
 const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";

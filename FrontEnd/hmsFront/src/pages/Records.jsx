@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Card, CardContent } from "../components/card.jsx";
-import { Button } from "../components/button";
+import { Button } from "../components/Button";
 import { ethers } from "ethers";
 import HospitalRecords from "../abi/HospitalRecords.json"; // make sure ABI path is correct
 

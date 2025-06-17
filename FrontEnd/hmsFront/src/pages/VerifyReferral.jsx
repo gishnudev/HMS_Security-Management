@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "../components/card";
-import { Button } from "../components/button";
+import { Button } from "../components/Button";
 
 export default function VerifyReferral() {
   const [referrals, setReferrals] = useState([]);
