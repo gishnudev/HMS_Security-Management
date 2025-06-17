@@ -31,8 +31,6 @@ const DoctorDashboard = () => {
         const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
         const address = await signer.getAddress();
-        console.log(address);
-        
         setAccount(address);
 
         const instance = new ethers.Contract(
@@ -44,53 +42,48 @@ const DoctorDashboard = () => {
         console.log(instance);
         
 
-        // Get doctor details if available
         try {
           const allUsers = await instance.getAllUsers();
+          console.log("getAllUsers",allUsers);
+          
           const doctorPatients = [];
 
           for (const user of allUsers) {
             const role = await instance.getRole(user);
+            console.log('role',role);
+            
 
-            // Patient = 1
             if (role == 1) {
               const assigned = await instance.assignedDoctor(user);
+              console.log("assigned",assigned);
+              
               if (assigned.toLowerCase() === address.toLowerCase()) {
-                try {
-                  const details = await instance.getPatientDetails(user);
-                  console.log(details);
-                  
-                  if (details && details.length >= 2) {
-                    doctorPatients.push({
-                      address: user,
-                      name: details[0],
-                      id: details[1],
-                    });
-                  }
-                } catch (err) {
-                  console.warn(`Failed to get patient details for ${user}`, err);
+                const details = await instance.getPatientDetails(user);
+                console.log("details",details);
+                
+                if (details && details.length >= 2) {
+                  doctorPatients.push({
+                    address: user,
+                    name: details[0],
+                    id: details[1],
+                  });
                 }
               }
             }
 
-            // Also fetch doctor name/id if this is a doctor
-            if (user.toLowerCase() === address.toLowerCase() && role == 2) {
-              try {
-                const docDetails = await instance.getDoctorDetails(user);
-                console.log("hi",docDetails);
-                
-                if (docDetails && docDetails.length >= 2) {
-                  setDoctorDetails({ name: docDetails[0], id: docDetails[1] });
-                }
-              } catch (err) {
-                console.warn("Doctor details not available", err);
+            if (user.toLowerCase() == address.toLowerCase() && role == 2) {
+              const docDetails = await instance.getDoctorDetails(user);
+              console.log("hi",docDetails);
+              
+              if (docDetails && docDetails.length >= 2) {
+                setDoctorDetails({ name: docDetails[0], id: docDetails[1] });
               }
             }
           }
 
           setPatients(doctorPatients);
         } catch (err) {
-          console.error("Error loading contract data", err);
+          console.error("Error loading data", err);
         }
       }
     };
@@ -128,9 +121,8 @@ const DoctorDashboard = () => {
       setUploading(false);
       return ipfsHash;
     } catch (error) {
-      console.error("Error uploading file to IPFS:", error);
+      console.error("Error uploading file:", error);
       setUploading(false);
-      alert("File upload failed. Please try again.");
       return null;
     }
   };
@@ -160,45 +152,43 @@ const DoctorDashboard = () => {
       setSelectedPatient(patientAddr);
       setRecordId(recordList[0]?.id || 0);
     } catch (err) {
-      console.error("Error fetching/creating records:", err);
+      console.error("Error fetching records:", err);
     }
   };
 
   const updateVitals = async () => {
-    if (!contract || recordId === 0) return alert("Select record");
+    if (!contract || recordId === 0) return;
     await contract.updateVitals(recordId, vitals);
     alert("Vitals updated");
   };
 
   const updatePrescription = async () => {
-    if (!contract || recordId === 0) return alert("Select record");
+    if (!contract || recordId === 0) return;
     await contract.updatePrescription(recordId, prescription, notes);
     alert("Prescription updated");
   };
 
   const editRecord = async () => {
-    if (!contract || recordId === 0) return alert("Select record");
+    if (!contract || recordId === 0) return;
     const ipfsHash = await handleFileUpload();
     if (!ipfsHash) return;
     await contract.editRecord(recordId, ipfsHash);
-    alert("Record IPFS hash updated");
+    alert("Record image updated on IPFS");
   };
 
   const referDoctor = async () => {
-    if (!contract || recordId === 0) return alert("Select record");
+    if (!contract || recordId === 0) return;
     await contract.referToAnotherDoctor(recordId, referralDoctor);
-    alert("Referred to another doctor");
+    alert("Patient referred successfully");
   };
 
   return (
-    <div className="p-4 space-y-6">
-      <h2 className="text-2xl font-bold">Doctor Dashboard</h2>
-
-      {/* Doctor Info */}
-      <Card className="mb-6">
+    <div className="p-6 space-y-6">
+      {/* Logged-in Doctor Info */}
+      <Card>
         <CardContent className="p-4 space-y-2">
-          <h3 className="text-xl font-bold">👨‍⚕️ Logged-in Doctor</h3>
-          <p><strong>Wallet:</strong> {account}</p>
+          <h2 className="text-2xl font-bold">👨‍⚕️ Doctor Details</h2>
+          <p><strong>Metamask ID:</strong> {account}</p>
           {doctorDetails.name && (
             <>
               <p><strong>Name:</strong> {doctorDetails.name}</p>
@@ -208,92 +198,83 @@ const DoctorDashboard = () => {
         </CardContent>
       </Card>
 
-      {/* Patient Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {patients.map((p, idx) => (
-          <Card key={idx}>
-            <CardContent className="space-y-2 p-4">
-              <p className="font-semibold text-lg">👤 Name: {p.name}</p>
-              <p className="text-sm text-gray-600">🆔 ID: {p.id}</p>
-              <Button onClick={() => fetchRecords(p.address)}>
-                📄 View Medical Records
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Records & Actions */}
-      {records.length > 0 && (
-        <div className="mt-6">
-          <h3 className="text-xl font-semibold mb-2">📁 Patient Records</h3>
-          <p className="font-bold mb-4">Selected Record ID: {recordId}</p>
-
-          {records.map((rec, i) => (
-            <Card key={i} className="mb-4">
+      {/* Patient List */}
+      <div>
+        <h3 className="text-xl font-bold mb-2">📋 Assigned Patients</h3>
+        <div className="grid md:grid-cols-2 gap-4">
+          {patients.map((p, idx) => (
+            <Card key={idx}>
               <CardContent className="space-y-2 p-4">
-                <p><strong>ID:</strong> {rec.id}</p>
-                <p>
-                  <strong>IPFS:</strong>{" "}
-                  <a
-                    href={`https://gateway.pinata.cloud/ipfs/${rec.ipfsHash}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 underline"
-                  >
-                    {rec.ipfsHash}
-                  </a>
-                </p>
-                <p><strong>Vitals:</strong> {rec.vitals}</p>
-                <p><strong>Prescription:</strong> {rec.prescription}</p>
-                <p><strong>Notes:</strong> {rec.notes}</p>
-                <Button onClick={() => setRecordId(rec.id)}>✏️ Select</Button>
+                <p className="font-semibold">👤 Name: {p.name}</p>
+                <p className="text-gray-600">🆔 ID: {p.id}</p>
+                <Button onClick={() => fetchRecords(p.address)}>
+                  📄 Select Patient
+                </Button>
               </CardContent>
             </Card>
           ))}
+        </div>
+      </div>
 
-          {/* Actions */}
-          <div className="space-y-4 mt-4">
-            <Input
-              type="file"
-              accept="image/*"
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, file: e.target.files[0] }))
-              }
-            />
-            {uploading && <p className="text-blue-600">Uploading...</p>}
-            {fileUrl && (
-              <p className="text-green-600">
-                Uploaded ✅: <a href={fileUrl}>{fileUrl}</a>
-              </p>
-            )}
-            <Button onClick={editRecord}>🔄 Upload Image & Update IPFS</Button>
+      {/* Patient Data Section */}
+      {selectedPatient && (
+        <div>
+          <h3 className="text-xl font-bold mt-4 mb-2">📁 Patient Data Upload</h3>
+          <p className="font-medium mb-2">Record ID: {recordId}</p>
 
-            <Textarea
-              placeholder="Vitals"
-              value={vitals}
-              onChange={(e) => setVitals(e.target.value)}
-            />
-            <Button onClick={updateVitals}>💓 Update Vitals</Button>
+          <div className="space-y-4">
+            {/* Image Upload */}
+            <div>
+              <Input
+                type="file"
+                accept="image/*"
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, file: e.target.files[0] }))
+                }
+              />
+              {uploading && <p className="text-blue-600">Uploading...</p>}
+              {fileUrl && (
+                <p className="text-green-600">
+                  Uploaded ✅: <a href={fileUrl}>{fileUrl}</a>
+                </p>
+              )}
+              <Button onClick={editRecord}>🖼️ Upload ECG/X-Ray Image</Button>
+            </div>
 
-            <Textarea
-              placeholder="Prescription"
-              value={prescription}
-              onChange={(e) => setPrescription(e.target.value)}
-            />
-            <Textarea
-              placeholder="Notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-            <Button onClick={updatePrescription}>📋 Update Prescription</Button>
+            {/* Vitals Input */}
+            <div>
+              <Textarea
+                placeholder="Enter Vitals"
+                value={vitals}
+                onChange={(e) => setVitals(e.target.value)}
+              />
+              <Button onClick={updateVitals}>💓 Update Vitals</Button>
+            </div>
 
-            <Input
-              placeholder="Referral Doctor Address"
-              value={referralDoctor}
-              onChange={(e) => setReferralDoctor(e.target.value)}
-            />
-            <Button onClick={referDoctor}>🔁 Refer</Button>
+            {/* Prescription Input */}
+            <div>
+              <Textarea
+                placeholder="Prescription"
+                value={prescription}
+                onChange={(e) => setPrescription(e.target.value)}
+              />
+              <Textarea
+                placeholder="Notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+              <Button onClick={updatePrescription}>📋 Update Prescription</Button>
+            </div>
+
+            {/* Refer Another Doctor */}
+            <div>
+              <Input
+                placeholder="Referral Doctor Wallet Address"
+                value={referralDoctor}
+                onChange={(e) => setReferralDoctor(e.target.value)}
+              />
+              <Button onClick={referDoctor}>🔁 Refer to Another Doctor</Button>
+            </div>
           </div>
         </div>
       )}
