@@ -154,6 +154,8 @@ const ReceptionistDashboard = () => {
   const [contract, setContract] = useState(null);
   const [patients, setPatients] = useState([]);
   const [doctors, setDoctors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isReceptionist, setIsReceptionist] = useState(false);
 
   const [name, setName] = useState("");
   const [id, setId] = useState("");
@@ -162,48 +164,47 @@ const ReceptionistDashboard = () => {
 
   useEffect(() => {
     const init = async () => {
-      if (window.ethereum) {
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        const signer = await provider.getSigner();
-        const addr = await signer.getAddress();
-        const c = new ethers.Contract(
-          contractAddress,
-          hospitalRecordsABI.abi,
-          signer
-        );
+      if (!window.ethereum) return;
 
-        setAccount(addr);
-        setContract(c);
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const addr = await signer.getAddress();
+      const c = new ethers.Contract(contractAddress, hospitalRecordsABI.abi, signer);
 
-        // Load all doctors
+      setAccount(addr);
+      setContract(c);
+
+      const role = await c.getRole(addr);
+
+      if (role == 5) { // Role.Receptionist
+        setIsReceptionist(true);
+
+        // Load doctors
         const doctorCount = await c.getDoctorCount();
-        console.log(doctorCount);
-        
         const dlist = [];
         for (let i = 0; i < doctorCount; i++) {
           const dAddr = await c.getDoctorByIndex(i);
-          console.log(dAddr);
-          
           const [docName, docId] = await c.getDoctorDetails(dAddr);
           dlist.push({ address: dAddr, name: docName, id: docId });
         }
         setDoctors(dlist);
 
-        // Load existing users
+        // Load patients
         const allUsers = await c.getAllUsers();
-        console.log(allUsers);
         const pList = [];
         for (const user of allUsers) {
-          const role = await c.getRole(user);          
-          if (role == 1) { // Role.Patient
+          const role = await c.getRole(user);
+          if (role == 1) {
             const [pname, pid] = await c.getPatientDetails(user);
             pList.push({ address: user, name: pname, id: pid });
           }
         }
         setPatients(pList);
-        console.log(pList);
       }
+
+      setLoading(false);
     };
+
     init();
   }, []);
 
@@ -228,6 +229,22 @@ const ReceptionistDashboard = () => {
       alert("Failed to add patient with doctor.");
     }
   };
+
+  if (loading) {
+    return (
+      <div className="p-6 text-center text-gray-600">
+        Checking access...
+      </div>
+    );
+  }
+
+  if (!isReceptionist) {
+    return (
+      <div className="p-6 text-center text-red-600 font-semibold">
+        ❌ Access Denied: You are not authorized to view this page.
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
@@ -299,7 +316,7 @@ const ReceptionistDashboard = () => {
             ))}
           </ul>
         )}
-      </div>      
+      </div>
     </div>
   );
 };
