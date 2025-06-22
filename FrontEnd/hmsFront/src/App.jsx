@@ -9,6 +9,7 @@ import Navbar from "./components/Navbar";
 import PatientDashboard from "./pages/PatientDashboard";
 import DoctorDashboard from "./pages/DoctorDashboard";
 import ReceptionistDashboard from "./pages/ReceptionistDashboard";
+import NurseDashboard from "./pages/NurseDashboard";
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
         <Route path="/patient" element={<PatientDashboard/>}/>
         <Route path="/doctor" element={<DoctorDashboard/>}/>
         <Route path="/receptionist" element={<ReceptionistDashboard/>}/>
+        <Route path="/nurse" element={<NurseDashboard/>}/>
 
       </Routes>
     </BrowserRouter>

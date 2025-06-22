@@ -1,9 +1,9 @@
-// export default Admin;
-
 import React, { useEffect, useState } from "react";
 import { ethers } from "ethers";
-import { useNavigate } from "react-router-dom"; // ✅ For redirect
+import { useNavigate } from "react-router-dom";
 import hospitalRecordsABI from "../abi/HospitalRecords.json";
+import UpdateButton from "../components/UpdateButton";
+import DeleteButton from "../components/DeleteButton";
 
 const contractAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 
@@ -15,11 +15,13 @@ const Admin = () => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  const roleMap = ["None", "Patient", "Nurse", "Doctor", "Admin", "Receptionist"];
+  const roleMap = ["None", "Patient", "Nurse", "Doctor", "Receptionist", "Admin"];
+
   const [formData, setFormData] = useState({
     user: "",
     name: "",
     id: "",
+    department: "",
     role: "Doctor",
   });
 
@@ -38,44 +40,65 @@ const Admin = () => {
         );
         setContract(hospitalContract);
 
-        const roleId = await hospitalContract.getRole(addr);
+        const roleId = await hospitalContract.roles(addr);
         if (roleMap[roleId] !== "Admin") {
           alert("Unauthorized access: Admins only");
-          navigate("/"); // Redirect to home or login
+          navigate("/");
           return;
         }
 
         setIsAdmin(true);
-        fetchAllUsers(hospitalContract);
+        await fetchAllUsers(hospitalContract);
       }
       setLoading(false);
     };
     init();
-  }, []);
+  }, [navigate]);
 
   const fetchAllUsers = async (contract) => {
-    const addresses = await contract.getAllUsers();
-    const data = await Promise.all(
-      addresses.map(async (user) => {
-        const roleId = await contract.getRole(user);
-        const role = roleMap[roleId];
-        let name = "", id = "";
-
-        try {
-          if (role === "Doctor") [name, id] = await contract.getDoctorDetails(user);
-          else if (role === "Patient") [name, id] = await contract.getPatientDetails(user);
-          else if (role === "Nurse") [name, id] = await contract.getNurseDetails(user);
-          else if (role === "Admin") [name, id] = await contract.getAdminDetails(user);
-          else if (role === "Receptionist") [name, id] = await contract.getReceptionistDetails(user);
-        } catch (err) {
-          console.warn(`Error fetching details for ${user}: ${err.message}`);
+    const [admins, doctors, nurses, receptionists] = await contract.viewAllStaff();
+    const addresses = [...admins, ...doctors, ...nurses, ...receptionists];
+  
+    const uniqueUsers = new Map();  // Address => userObj
+  
+    for (const user of addresses) {
+      if (uniqueUsers.has(user)) continue; // Skip if already processed
+  
+      const roleId = await contract.roles(user);
+      const role = roleMap[roleId];
+  
+      let name = "", id = "", department = "";
+  
+      try {
+        if (role === "Doctor") {
+          const info = await contract.doctorDetails(user);
+          name = info.name;
+          id = info.id;
+          department = info.department;
+        } else if (role === "Nurse") {
+          const info = await contract.nurseDetails(user);
+          name = info.name;
+          id = info.id;
+        } else if (role === "Receptionist") {
+          const info = await contract.receptionistDetails(user);
+          name = info.name;
+          id = info.id;
+        } else if (role === "Admin") {
+          const info = await contract.adminDetails(user);
+          name = info.name;
+          id = info.id;
         }
-
-        return { user, role, name, id };
-      })
-    );
-    setUsers(data);
+      } catch (err) {
+        console.warn(`Error fetching details for ${user}: ${err.message}`);
+      }
+  
+      uniqueUsers.set(user, { user, role, name, id, department });
+    }
+  
+    // Convert back to array
+    setUsers(Array.from(uniqueUsers.values()));
   };
+  
 
   const handleInput = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -84,18 +107,61 @@ const Admin = () => {
   const handleAssignRole = async () => {
     if (!contract) return;
 
-    const { user, name, id, role } = formData;
+    const { user, name, id, department, role } = formData;
+
     try {
-      if (role === "Doctor") await contract.addDoctor(user, name, id);
-      else if (role === "Nurse") await contract.addNurse(user, name, id);
-      else if (role === "Admin") await contract.addAdmin(user, name, id);
-      else if (role === "Receptionist") await contract.addReceptionist(user, name, id);
-      else return alert("Invalid role");
+      if (role === "Doctor") {
+        await contract.addDoctor(user, name, id, department);
+      } else if (role === "Nurse") {
+        await contract.addNurse(user, name, id);
+      } else if (role === "Receptionist") {
+        await contract.addReceptionist(user, name, id);
+      } else if (role === "Admin") {
+        await contract.addAdmin(user);
+      } else {
+        return alert("Invalid role");
+      }
 
       alert(`${role} added successfully`);
-      fetchAllUsers(contract);
+      await fetchAllUsers(contract);
     } catch (err) {
       alert("Transaction failed: " + err.message);
+    }
+  };
+
+  const handleUpdateUser = async (userObj) => {
+    try {
+      if (userObj.role === "Doctor") {
+        const name = prompt("Enter new name:", userObj.name);
+        const id = prompt("Enter new ID:", userObj.id);
+        const department = prompt("Enter new department:", userObj.department);
+        if (name && id && department) {
+          await contract.updateDoctor(userObj.user, name, id, department);
+          alert("Doctor updated successfully");
+        }
+      }
+      await fetchAllUsers(contract);
+    } catch (err) {
+      alert("Update failed: " + err.message);
+    }
+  };
+
+  const handleDeleteUser = async (userAddr, role) => {
+    try {
+      if (role === "Doctor") {
+        await contract.removeDoctor(userAddr);
+      } else if (role === "Nurse") {
+        await contract.removeNurse(userAddr);
+      } else if (role === "Receptionist") {
+        await contract.removeReceptionist(userAddr);
+      } else {
+        alert("Delete not supported for this role");
+        return;
+      }
+      alert(`${role} removed successfully`);
+      await fetchAllUsers(contract);
+    } catch (err) {
+      alert("Delete failed: " + err.message);
     }
   };
 
@@ -134,6 +200,15 @@ const Admin = () => {
             placeholder="ID"
             className="border p-2 rounded"
           />
+          <input
+            type="text"
+            name="department"
+            value={formData.department}
+            onChange={handleInput}
+            placeholder="Department (for Doctor)"
+            className="border p-2 rounded"
+            disabled={formData.role !== "Doctor"}
+          />
           <select
             name="role"
             value={formData.role}
@@ -142,8 +217,8 @@ const Admin = () => {
           >
             <option>Doctor</option>
             <option>Nurse</option>
-            <option>Admin</option>
             <option>Receptionist</option>
+            <option>Admin</option>
           </select>
         </div>
         <button
@@ -155,7 +230,7 @@ const Admin = () => {
       </div>
 
       <div className="border p-4 rounded shadow">
-        <h2 className="text-xl font-semibold mb-4">All Users</h2>
+        <h2 className="text-xl font-semibold mb-4">All Staff</h2>
         <table className="w-full border">
           <thead>
             <tr className="bg-gray-200">
@@ -163,15 +238,30 @@ const Admin = () => {
               <th className="p-2 border">Role</th>
               <th className="p-2 border">Name</th>
               <th className="p-2 border">ID</th>
+              <th className="p-2 border">Department</th>
+              <th className="p-2 border">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {users.map((userObj, idx) => (
+            {users.map((u, idx) => (
               <tr key={idx} className="hover:bg-gray-50">
-                <td className="p-2 border font-mono text-xs">{userObj.user}</td>
-                <td className="p-2 border">{userObj.role}</td>
-                <td className="p-2 border">{userObj.name}</td>
-                <td className="p-2 border">{userObj.id}</td>
+                <td className="p-2 border font-mono text-xs">{u.user}</td>
+                <td className="p-2 border">{u.role}</td>
+                <td className="p-2 border">{u.name}</td>
+                <td className="p-2 border">{u.id}</td>
+                <td className="p-2 border">{u.department}</td>
+                <td className="p-2 border">
+                  {u.role === "None" ? (
+                    <span className="text-gray-400 italic">Removed</span>
+                  ) : u.role === "Admin" && idx === 0 ? (
+                    <span className="text-gray-400 italic">Main Admin</span>
+                  ) : (
+                    <>
+                      <UpdateButton userObj={u} onUpdate={handleUpdateUser} />
+                      <DeleteButton userObj={u} onDelete={handleDeleteUser} />
+                    </>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

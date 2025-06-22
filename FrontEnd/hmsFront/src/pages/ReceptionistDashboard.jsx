@@ -1,170 +1,41 @@
-// import { useEffect, useState } from "react";
-// import { ethers } from "ethers";
-// import { useNavigate } from "react-router-dom";
-// import HospitalRecords from "../abi/HospitalRecords.json";
-// import { Button } from "../components/button";
-// import { Card, CardContent } from "../components/card";
-// import Input from "../components/Input";
-
-// const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
-
-// export default function ReceptionistDashboard() {
-//   const [wallet, setWallet] = useState("");
-//   const [contract, setContract] = useState(null);
-//   const [isReceptionist, setIsReceptionist] = useState(false);
-//   const [loading, setLoading] = useState(true);
-//   const [error, setError] = useState("");
-//   const [patients, setPatients] = useState([]);
-//   const [name, setName] = useState("");
-//   const [patientId, setPatientId] = useState("");
-//   const [patientAddress, setPatientAddress] = useState("");
-
-//   const navigate = useNavigate();
-
-//   useEffect(() => {
-//     const init = async () => {
-//       if (!window.ethereum) {
-//         alert("Please install MetaMask.");
-//         return;
-//       }
-
-//       try {
-//         const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-//         const address = accounts[0];
-//         setWallet(address);
-//         localStorage.setItem("walletAddress", address);
-
-//         const provider = new ethers.BrowserProvider(window.ethereum);
-//         const signer = await provider.getSigner();
-//         const contractInstance = new ethers.Contract(CONTRACT_ADDRESS, HospitalRecords.abi, signer);
-//         setContract(contractInstance);
-
-//         const role = await contractInstance.getRole(address);
-
-//         if (Number(role) !== 5) {
-//           setError("❌ Access denied. You are not a receptionist.");
-//           return;
-//         }
-
-//         setIsReceptionist(true);
-
-//         const users = await contractInstance.getAllUsers();
-//         const patientData = [];
-
-//         for (const user of users) {
-//           const userRole = await contractInstance.getRole(user);
-//           if (Number(userRole) === 1) {
-//             const [pname, pid] = await contractInstance.getPatientDetails(user);
-//             patientData.push({ address: user, name: pname, id: pid });
-//           }
-//         }
-
-//         setPatients(patientData);
-//       } catch (err) {
-//         console.error("Error loading receptionist dashboard:", err);
-//         setError("❌ Failed to load receptionist dashboard.");
-//       } finally {
-//         setLoading(false);
-//       }
-//     };
-
-//     init();
-//   }, [navigate]);
-
-//   const handleAddPatient = async () => {
-//     if (!name || !patientId || !patientAddress) {
-//       alert("Please enter all patient details.");
-//       return;
-//     }
-
-//     if (wallet.toLowerCase() === patientAddress.toLowerCase()) {
-//       alert("Receptionist cannot register themselves as a patient.");
-//       return;
-//     }
-
-//     try {
-//       const tx = await contract.addPatient(patientAddress, name, patientId);
-//       await tx.wait();
-//       alert("✅ Patient added successfully!");
-//       window.location.reload();
-//     } catch (err) {
-//       console.error("Error adding patient:", err);
-//       alert("Failed to add patient.");
-//     }
-//   };
-
-//   if (loading) return <div className="p-6 text-gray-500">⏳ Loading Receptionist Dashboard...</div>;
-//   if (error) return <div className="p-6 text-red-500 font-bold">{error}</div>;
-
-//   return (
-//     <div className="p-6">
-//       <h1 className="text-2xl font-bold mb-4">Receptionist Dashboard</h1>
-//       <p className="mb-6 text-gray-500">👛 Wallet: {wallet}</p>
-
-//       <div className="mb-6">
-//         <h2 className="text-lg font-semibold mb-2">➕ Add New Patient</h2>
-//         <div className="flex flex-col md:flex-row gap-2">
-//           <Input
-//             placeholder="Patient Wallet Address"
-//             value={patientAddress}
-//             onChange={(e) => setPatientAddress(e.target.value)}
-//           />
-//           <Input
-//             placeholder="Patient Name"
-//             value={name}
-//             onChange={(e) => setName(e.target.value)}
-//           />
-//           <Input
-//             placeholder="Patient ID"
-//             value={patientId}
-//             onChange={(e) => setPatientId(e.target.value)}
-//           />
-//           <Button onClick={handleAddPatient}>Add Patient</Button>
-//         </div>
-//       </div>
-
-//       <h2 className="text-lg font-semibold mb-2">📋 Registered Patients</h2>
-//       {patients.length === 0 ? (
-//         <Card><CardContent className="p-4">No patients found.</CardContent></Card>
-//       ) : (
-//         <div className="grid gap-4 md:grid-cols-2">
-//           {patients.map((p, index) => (
-//             <Card key={index}>
-//               <CardContent className="p-4">
-//                 <p><strong>👤 Name:</strong> {p.name}</p>
-//                 <p><strong>🆔 Patient ID:</strong> {p.id}</p>
-//                 <p><strong>🔗 Address:</strong> {p.address}</p>
-//               </CardContent>
-//             </Card>
-//           ))}
-//         </div>
-//       )}
-//     </div>
-//   );
-// }
-
 import React, { useEffect, useState } from "react";
 import { ethers } from "ethers";
 import hospitalRecordsABI from "../abi/HospitalRecords.json";
 
-const contractAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; // Replace with actual address
+const contractAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+
+const roleMap = {
+  0: "None",
+  1: "Patient",
+  2: "Nurse",
+  3: "Doctor",
+  4: "Receptionist",
+  5: "Admin"
+};
 
 const ReceptionistDashboard = () => {
   const [account, setAccount] = useState(null);
   const [contract, setContract] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [roleId, setRoleId] = useState(0); // default to None
+
   const [patients, setPatients] = useState([]);
   const [doctors, setDoctors] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [isReceptionist, setIsReceptionist] = useState(false);
 
+  const [wallet, setWallet] = useState("");
   const [name, setName] = useState("");
   const [id, setId] = useState("");
-  const [wallet, setWallet] = useState("");
+  const [age, setAge] = useState("");
+  const [gender, setGender] = useState("");
+  const [contact, setContact] = useState("");
   const [selectedDoctor, setSelectedDoctor] = useState("");
+
+  const [searchAddress, setSearchAddress] = useState("");
+  const [searchResult, setSearchResult] = useState(null);
 
   useEffect(() => {
     const init = async () => {
-      if (!window.ethereum) return;
+      if (!window.ethereum) return alert("Please connect MetaMask");
 
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
@@ -174,32 +45,14 @@ const ReceptionistDashboard = () => {
       setAccount(addr);
       setContract(c);
 
-      const role = await c.getRole(addr);
+      const fetchedRoleId = await c.roles(addr);
+      console.log();
+      
+      setRoleId(Number(fetchedRoleId));
 
-      if (role == 5) { // Role.Receptionist
-        setIsReceptionist(true);
-
-        // Load doctors
-        const doctorCount = await c.getDoctorCount();
-        const dlist = [];
-        for (let i = 0; i < doctorCount; i++) {
-          const dAddr = await c.getDoctorByIndex(i);
-          const [docName, docId] = await c.getDoctorDetails(dAddr);
-          dlist.push({ address: dAddr, name: docName, id: docId });
-        }
-        setDoctors(dlist);
-
-        // Load patients
-        const allUsers = await c.getAllUsers();
-        const pList = [];
-        for (const user of allUsers) {
-          const role = await c.getRole(user);
-          if (role == 1) {
-            const [pname, pid] = await c.getPatientDetails(user);
-            pList.push({ address: user, name: pname, id: pid });
-          }
-        }
-        setPatients(pList);
+      if (Number(fetchedRoleId) === 4) {
+        await fetchAllPatients(c);
+        await fetchAllDoctors(c);
       }
 
       setLoading(false);
@@ -208,110 +61,174 @@ const ReceptionistDashboard = () => {
     init();
   }, []);
 
-  const handleAddPatient = async () => {
+  const fetchAllDoctors = async (c) => {
     try {
-      const tx = await contract.addPatient(wallet, name, id);
-      await tx.wait();
-      alert("Patient added successfully!");
+      const doctorAddrs = await c.viewAllDoctors();  // Call returns a single array
+      const docList = [];
+      for (const addr of doctorAddrs) {
+        const info = await c.doctorDetails(addr);
+        docList.push({
+          address: addr,
+          name: info.name,
+          id: info.id,
+          department: info.department
+        });
+      }
+      setDoctors(docList);
+      console.log(docList);
     } catch (err) {
-      console.error(err);
-      alert("Failed to add patient.");
+      console.error("Error fetching doctors:", err);
+    }
+  };
+  
+  
+  const fetchAllPatients = async (c) => {
+    try {
+      const patientAddrs = await c.viewAllPatients();
+      const plist = [];
+      for (const addr of patientAddrs) {
+        const info = await c.patientDetails(addr);
+        plist.push({ address: addr, ...info });
+      }
+      setPatients(plist);
+    } catch (err) {
+      console.error("Error fetching patients:", err);
     }
   };
 
-  const handleAddPatientWithDoctor = async () => {
+  const handleRegister = async () => {
     try {
-      const tx = await contract.addPatientWithDoctor(wallet, name, id, selectedDoctor);
+      const tx = await contract.registerPatient(
+        wallet,
+        name,
+        id,
+        parseInt(age),
+        gender,
+        contact,
+        selectedDoctor || ethers.ZeroAddress
+      );
       await tx.wait();
-      alert("Patient with doctor assigned successfully!");
+      alert("Patient registered successfully");
+      await fetchAllPatients(contract);
     } catch (err) {
       console.error(err);
-      alert("Failed to add patient with doctor.");
+      alert("Registration failed");
     }
   };
 
-  if (loading) {
-    return (
-      <div className="p-6 text-center text-gray-600">
-        Checking access...
-      </div>
-    );
-  }
+  const handleUpdate = async () => {
+    try {
+      const tx = await contract.updatePatientDetails(
+        wallet,
+        name,
+        id,
+        parseInt(age),
+        gender,
+        contact
+      );
+      await tx.wait();
+      alert("Patient updated");
+      await fetchAllPatients(contract);
+    } catch (err) {
+      console.error(err);
+      alert("Update failed");
+    }
+  };
 
-  if (!isReceptionist) {
+  const handleRefer = async (pAddr, dAddr) => {
+    try {
+      const tx = await contract.referPatient(pAddr, dAddr);
+      await tx.wait();
+      alert("Referral successful");
+    } catch (err) {
+      console.error(err);
+      alert("Referral failed");
+    }
+  };
+
+  const handleSearch = async () => {
+    try {
+      const data = await contract.searchPatient(searchAddress);
+      setSearchResult(data);
+    } catch (err) {
+      console.error(err);
+      alert("Search failed");
+    }
+  };
+
+  if (loading) return <div className="p-6">Loading...</div>;
+
+  if (roleId !== 4)
     return (
-      <div className="p-6 text-center text-red-600 font-semibold">
-        ❌ Access Denied: You are not authorized to view this page.
+      <div className="p-6 text-red-600">
+        ❌ Access Denied. This page is for Receptionist only. Your role: {roleMap[roleId]}
       </div>
     );
-  }
 
   return (
     <div className="p-6">
       <h1 className="text-3xl font-bold mb-4">Receptionist Dashboard</h1>
-      <p className="text-gray-500 text-sm mb-6">Connected as: {account}</p>
+      <p className="text-gray-500 mb-4">Connected: {account} ({roleMap[roleId]})</p>
+      {/* --- Patient registration/update form --- */}
+      <div className="bg-white p-4 rounded shadow mb-6">
+        <h2 className="text-xl font-semibold mb-2">Register / Update Patient</h2>
+        <input className="w-full border p-2 mb-2" placeholder="Wallet" value={wallet} onChange={e => setWallet(e.target.value)} />
+        <input className="w-full border p-2 mb-2" placeholder="Name" value={name} onChange={e => setName(e.target.value)} />
+        <input className="w-full border p-2 mb-2" placeholder="ID" value={id} onChange={e => setId(e.target.value)} />
+        <input className="w-full border p-2 mb-2" placeholder="Age" value={age} onChange={e => setAge(e.target.value)} />
+        <input className="w-full border p-2 mb-2" placeholder="Gender" value={gender} onChange={e => setGender(e.target.value)} />
+        <input className="w-full border p-2 mb-2" placeholder="Contact" value={contact} onChange={e => setContact(e.target.value)} />
 
-      <div className="bg-white rounded shadow p-4 mb-6">
-        <h2 className="text-xl font-semibold mb-4">Register New Patient</h2>
-        <input
-          className="block w-full border p-2 mb-2"
-          type="text"
-          placeholder="Patient Wallet Address"
-          value={wallet}
-          onChange={(e) => setWallet(e.target.value)}
-        />
-        <input
-          className="block w-full border p-2 mb-2"
-          type="text"
-          placeholder="Patient Name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <input
-          className="block w-full border p-2 mb-2"
-          type="text"
-          placeholder="Patient ID"
-          value={id}
-          onChange={(e) => setId(e.target.value)}
-        />
-
-        <button
-          onClick={handleAddPatient}
-          className="bg-blue-600 text-white px-4 py-2 rounded mr-4"
-        >
-          Register Without Doctor
-        </button>
-        
-        <select
-          className="block mt-4 border p-2 w-full"
-          value={selectedDoctor}
-          onChange={(e) => setSelectedDoctor(e.target.value)}
-        >
-          <option value="">-- Assign Doctor (Optional) --</option>
-          {doctors.map((doc) => (
-            <option key={doc.address} value={doc.address}>
-              {doc.name} ({doc.id})
+        <select className="w-full border p-2 mb-2" value={selectedDoctor} onChange={e => setSelectedDoctor(e.target.value)}>
+          <option value="">-- Assign Doctor --</option>
+          {doctors.map(d => (
+            <option key={d.address} value={d.address}>
+              {d.name} ({d.id}) - {d.department}
             </option>
           ))}
         </select>
 
-        <button
-          onClick={handleAddPatientWithDoctor}
-          className="bg-green-600 text-white px-4 py-2 rounded mt-2"
-        >
-          Register With Doctor
-        </button>
+        <div>
+          <button onClick={handleRegister} className="bg-blue-600 text-white px-4 py-2 rounded mr-2">Register</button>
+          <button onClick={handleUpdate} className="bg-yellow-600 text-white px-4 py-2 rounded">Update</button>
+        </div>
       </div>
 
-      <div className="bg-white rounded shadow p-4">
-        <h2 className="text-xl font-semibold mb-4">Registered Patients</h2>
+      {/* --- Patient search --- */}
+      <div className="bg-white p-4 rounded shadow mb-6">
+        <h2 className="text-xl font-semibold mb-2">Search Patient</h2>
+        <input className="w-full border p-2 mb-2" placeholder="Patient Address" value={searchAddress} onChange={e => setSearchAddress(e.target.value)} />
+        <button onClick={handleSearch} className="bg-green-600 text-white px-4 py-2 rounded">Search</button>
+        {searchResult && (
+          <div className="mt-2 p-2 border rounded">
+            <p><strong>Name:</strong> {searchResult[0]}</p>
+            <p><strong>ID:</strong> {searchResult[1]}</p>
+            <p><strong>Age:</strong> {searchResult[2].toString()}</p>
+            <p><strong>Gender:</strong> {searchResult[3]}</p>
+            <p><strong>Contact:</strong> {searchResult[4]}</p>
+            <p><strong>Records:</strong> {searchResult[5].length}</p>
+          </div>
+        )}
+      </div>
+
+      {/* --- List of patients + refer --- */}
+      <div className="bg-white p-4 rounded shadow">
+        <h2 className="text-xl font-semibold mb-2">Registered Patients</h2>
         {patients.length === 0 ? (
           <p>No patients found.</p>
         ) : (
-          <ul className="list-disc list-inside">
-            {patients.map((p) => (
+          <ul className="list-disc pl-5">
+            {patients.map(p => (
               <li key={p.address}>
                 {p.name} ({p.id}) - {p.address}
+                <select className="border p-1 ml-2" onChange={e => handleRefer(p.address, e.target.value)}>
+                  <option value="">-- Refer to Doctor --</option>
+                  {doctors.map(d => (
+                    <option key={d.address} value={d.address}>
+                      {d.name} ({d.id})
+                    </option>
+                  ))}
+                </select>
               </li>
             ))}
           </ul>
